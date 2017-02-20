@@ -3,8 +3,15 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <sys/time.h>
 
 #define MallocA(n, ptr) posix_memalign((void**)ptr, 64, (n) * sizeof(**(ptr)));
+
+double gettime() {
+  struct timeval tp;
+  gettimeofday(&tp, NULL);
+  return (double)tp.tv_sec + 1e-6*tp.tv_usec;
+}
 
 void Cosspace(double a, double b, int n, double **x) {
   double *y;
@@ -112,7 +119,7 @@ void dgeqrf_(int *m, int *n, double *a, int *lda, double *tau, double *work, int
 int main(int argc, char **argv) {
   int verbose = 0;
   int m, n, lwork, info;
-  double *x, *a, *b, *tau_a, *tau_b, *work;
+  double *x, *a, *b, *tau_a, *tau_b, *work, t;
   if (argc < 3 || argc > 4) {
     fprintf(stderr, "usage: %s M N [Verbose]\n", argv[0]);
     return 1;
@@ -126,7 +133,10 @@ int main(int argc, char **argv) {
 
   VanderCheb(m, n, x, &a);
   MallocA(n, &tau_a);
+  t = gettime();
   QRFactor(m, n, a, m, tau_a, work, lwork, &info);
+  t = gettime() - t;
+  printf("%10s %10.6f s\t%7.3f GF/s\n", "QRFactor", t, (2.*m*n*n - 2./3*n*n*n)*1e-9/t);
   if (verbose) {
     FPrintMatrix(stdout, "A", "% 10.6f", m, n, a);
     FPrintMatrix(stdout, "tauA", "% 10.6f", 1, n, tau_a);
@@ -134,7 +144,10 @@ int main(int argc, char **argv) {
 
   VanderCheb(m, n, x, &b);
   MallocA(n, &tau_b);
+  t = gettime();
   dgeqrf_(&m, &n, b, &m, tau_b, work, &lwork, &info);
+  t = gettime() - t;
+  printf("%10s %10.6f s\t%7.3f GF/s\n", "dgeqrf", t, (2.*m*n*n - 2./3*n*n*n)*1e-9/t);
   if (verbose) {
     FPrintMatrix(stdout, "B", "% 10.6f", m, n, b);
     FPrintMatrix(stdout, "tauB", "% 10.6f", 1, n, tau_b);
