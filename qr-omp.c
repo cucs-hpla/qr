@@ -114,7 +114,7 @@ void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int l
 }
 
 // Declare LAPACK dgeqrf (assuming the most common Fortran name mangling)
-void dgeqrf_(int *m, int *n, double *a, int *lda, double *tau, double *work, int *lwork, int *info);
+extern void dgeqrf_(int *m, int *n, double *a, int *lda, double *tau, double *work, int *lwork, int *info);
 
 int main(int argc, char **argv) {
   int verbose = 0;
