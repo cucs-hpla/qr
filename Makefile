@@ -1,12 +1,14 @@
 #matrix size input parameters m & n
 #print qr: a=3, no print qr a =0
-m = 10000
-n = 1000
+m = 1000000
+n = 100
 a = 0
+
+OMP_NUM_THREADS=4
 
 CC = gcc
 LINKER = $(CC)
-CFLAGS += -Wall -std=c99 -O3
+CFLAGS = -Wall -std=c99 -O3 -fopenmp
 LDFLAGS = -L/usr/local/opt/openblas/lib -lblas -lm
 
 UTIL := qr-omp.o
@@ -20,11 +22,11 @@ all :
 
 qr.x: $(UTIL) 
 	$(LINKER) $(UTIL) $(LDFLAGS) \
-	$(BLAS_LIB) -o $(TEST_BIN) $@ 
+	$(BLAS_LIB) $(CFLAGS) -o $(TEST_BIN) $@ 
 
 run:
 	make all
-	OMP_NUM_THREADS=4 ./qr.x $(m) $(n) $(a)
+	OMP_NUM_THREADS=1 ./qr.x $(m) $(n) $(a)
 
 clean:
 	rm -f *.o *~ core *.x

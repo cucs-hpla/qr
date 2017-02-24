@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <omp.h>
 
 #define MallocA(n, ptr) posix_memalign((void**)ptr, 64, (n) * sizeof(**(ptr)));
 
@@ -16,9 +17,10 @@ double gettime() {
 void Cosspace(double a, double b, int n, double **x) {
   double *y;
   MallocA(n, &y);
+#pragma omp parallel for  
   for (int i=0; i<n; i++) {
     y[i] = (a+b)/2 + (b-a)/2 * cos(M_PI*i / (n-1));
-  }
+  }  
   *x = y;
 }
 
@@ -26,6 +28,7 @@ void Cosspace(double a, double b, int n, double **x) {
 void VanderCheb(int m, int n, double *x, double **a) {
   double *b;
   MallocA(m*n, &b);
+#pragma omp parallel for
   for (int i=0; i<m; i++) {
     int j = 0;
     for ( ; j<1; j++) b[i+m*j] = 1;
@@ -50,6 +53,7 @@ void FPrintMatrix(FILE *stream, const char *name, const char *fmt, int m, int n,
 
 double MaxDifference(int m, int n, const double *a, const double *b) {
   double max = 0;
+#pragma omp parallel for
   for (int i=0; i<m*n; i++) {
     // Logic intended to treat NaN as big
     if (!(fabs(a[i] - b[i]) < max)) max = fabs(a[i] - b[i]);
@@ -60,6 +64,7 @@ double MaxDifference(int m, int n, const double *a, const double *b) {
 // Compute the dot product of two vectors
 double VecDot(int n, const double *x, const double *y) {
   double sum = 0;
+#pragma omp parallel for reduction(+: sum)
   for (int i=0; i<n; i++) {
     sum += x[i]*y[i];
   }
@@ -68,11 +73,13 @@ double VecDot(int n, const double *x, const double *y) {
 
 // Scale a vector
 void VecScale(int n, double *x, double scale) {
+#pragma omp parallel for
   for (int i=0; i<n; i++) x[i] *= scale;
 }
 
 // Compute y += alpha * x
 void VecAXPY(int n, double *y, double alpha, const double *x) {
+#pragma omp parallel for
   for (int i=0; i<n; i++) {
     y[i] += alpha * x[i];
   }
@@ -83,6 +90,7 @@ void VecAXPY(int n, double *y, double alpha, const double *x) {
 // in-place.  The reflector plane is defined by the vector v = [1; x].
 // That is, the first entry of v is implicitly 1 and not stored.
 void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
+#pragma omp parallel for
   for (int i=0; i<n; i++) { // One column at a time
     double *ai = &a[0+lda*i];
     double dot = ai[0] + VecDot(m-1, x, ai+1);
