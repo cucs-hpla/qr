@@ -90,10 +90,11 @@ Additionally, to improve performance in the code I was able to add some omp para
   }
 
 ```
-This does enable some performance enhancment pending on the size of the matrix.  If the size is too small communication becomes relatively more expensive and actually makes the program run slower.  However, for very large matricies great speedups can be seen.  Especially for tall skinny matricies! We can even see for certain sizes "TSQR" that the QRFactor can outperform the lapack implementation.  But in general lapack is faster.
+This does enable some performance enhancment pending on the size of the matrix.  If the size is too small communication becomes relatively more expensive and actually makes the program run slower.  However, for very large matricies great speedups can be seen.  Especially for tall skinny matricies!  I believe this comes from the speed up seen in the dot products when they are longer.  We can even see for certain sizes "TSQR" that the QRFactor can outperform the lapack implementation.  But in general lapack is faster.
 
 
 #2.) What impediments remain for higher performance?
+We did see some speed ups when implementing OpenMP, but there are still some gains to be made.  Much like we saw in the matrix matrix multiply we can take advantage of blocking so that we minimize cache instructions and misses.  It seems that being diligent with memory will always allow for performance enhancments.
 
 
 #3.) A block QR algorithm (known as Tall-Skinny QR, TSQR) is based on the recurrence<br \>
