@@ -83,6 +83,7 @@ void VecAXPY(int n, double *y, double alpha, const double *x) {
 // in-place.  The reflector plane is defined by the vector v = [1; x].
 // That is, the first entry of v is implicitly 1 and not stored.
 void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
+  #pragma omp parallel for
   for (int i=0; i<n; i++) { // One column at a time
     double *ai = &a[0+lda*i];
     double dot = ai[0] + VecDot(m-1, x, ai+1);
