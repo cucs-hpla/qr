@@ -6,6 +6,7 @@ void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
     for (int i=0; i<n; i++) { // One column at a time
         ...
     }
+}
 ```
 
 We specify the number of OMP threads at runtime, using **OMP_NUM_THREADS**, and test the QR factorization without OpenMP against OpenMP with 2 and 4 threads. The following plot shows the results (in GFLOPS/s) for varying matrix sizes, with the **dgeqrf** results for each case included for reference.
