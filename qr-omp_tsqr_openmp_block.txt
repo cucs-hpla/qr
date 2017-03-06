@@ -3,6 +3,7 @@
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include <sys/time.h>
 
 #define MallocA(n, ptr) posix_memalign((void**)ptr, 64, (n) * sizeof(**(ptr)));
@@ -83,18 +84,27 @@ void VecAXPY(int n, double *y, double alpha, const double *x) {
 // in-place.  The reflector plane is defined by the vector v = [1; x].
 // That is, the first entry of v is implicitly 1 and not stored.
 void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
+    int nColsBlocked = 4;
+    int blockStart;
 #pragma omp parallel for
-    for(int i=0; i<n; i++) { // One column per thread
-    double *ai = &a[0+lda*i];
-    double dot = ai[0] + VecDot(m-1, x, ai+1);
-    ai[0] -= tau*dot;
-    VecAXPY(m-1, ai+1, -tau*dot, x);
-  }
+    for(int i=0; i<n/nColsBlocked; i++) { // multiple columns per thread
+        blockStart = 0;
+        for(int jBlock=0; jBlock<nColsBlocked; jBlock++) {
+            double *ai = &a[0+lda*(blockStart+jBlock)];
+            double dot = ai[0] + VecDot(m-1, x, ai+1);
+            ai[0] -= tau*dot;
+            VecAXPY(m-1, ai+1, -tau*dot, x);
+        }
+        blockStart += nColsBlocked;
+    }
 }
 
+
+// Householder QR
+//---------------
 // Compute the in-place Householder QR factorization of A.
 // This function is meant to be a simple version of dgeqrf.
-void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int lwork, int *info) {
+double * QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int lwork, int *info) {
   for (int i=0; i<n; i++) {
     if (m-i-1 == 0) { // No sub-diagonal
       tau[n-1] = 0;
@@ -112,15 +122,72 @@ void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int l
     Reflect1(m-i, n-i-1, &a[i+lda*(i+1)], lda, &v[1], tau[i]);
   }
   *info = 0;
+  return a; 
 }
 
+// QRTS
+//-----
+
+// Function to subdivide matrix in two
+double *GetHalf( int m, int n, double *a, bool flagFirstHalf){
+  int m_ini, m_end;
+  if (flagFirstHalf){
+    m_ini = 1;
+    m_end = m/2;
+  } else {
+    m_ini = m/2+1;
+    m_end = m;
+  }
+  int m_half = m_ini-m_end;
+  double *b;
+  MallocA(m_half*n, &b);  
+  for(int i = 0; i < m_half; i++){for(int j = 0; j < n;j++) { b[i+m_half*j] = a[(m_ini-1)*n +i+m_half*j];}};
+  
+  return b;
+}
+
+// Function to concatenate the matrices of the QRTS approach.
+void Concatenate(int ma, int na, double **a, int mb, int nb, double **b, double *c) {
+  MallocA(ma*nb, &c);
+  for(int i = 0; i < ma; i++){for(int j = 0; j < na;j++) { c[i+ma*j] = a[i][j];}};
+  for(int i = 0 ; i < mb ; i++){for(int j = 0; j < nb ; j++){ c[ (ma*na)+i+mb*j] = b[i][j];}};
+}
+
+// Compute the Householder QR factorization for a tall-skinny matrix (QRTS).
+double * QRFactorTS(int m, int n, double *a, int lda, double *tau, double *work, int lwork, int *info) {
+  double *qr;
+  for (int i=0; i<n; i++) {
+    if (m <= 2*n) { 
+        qr = QRFactor(m, n, a, m, tau, work, lwork, info);
+    } else {
+        int mHalf0 = m/2;
+        int mHalf1 = m-mHalf0;
+        double *aHalf0 = GetHalf(m, n, a, true);
+        double *aHalf1 = GetHalf(m, n, a, false);
+        double *qr0 = QRFactorTS(mHalf0, n, aHalf0, mHalf0, tau, work, lwork, info);
+        double *qr1 = QRFactorTS(mHalf1, n, aHalf1, mHalf1, tau, work, lwork, info);
+        double *B;
+        MallocA(m*n, &B);
+        Concatenate(mHalf0, n, &qr0, mHalf1, n, &qr1, B); 
+        qr = QRFactorTS(mHalf0, n, a, mHalf0, tau, work, lwork, info);
+    }
+  }
+  *info = 0;
+  return qr;
+}
+
+// declaration of dgeqrf
+// ---------------------
 // Declare LAPACK dgeqrf (assuming the most common Fortran name mangling)
 void dgeqrf_(int *m, int *n, double *a, int *lda, double *tau, double *work, int *lwork, int *info);
 
+
+// Main function
+// -------------
 int main(int argc, char **argv) {
   int verbose = 0;
   int m, n, lwork, info;
-  double *x, *a, *b, *tau_a, *tau_b, *work, t;
+  double *x, *a, *b, *c, *tau_a, *tau_b, *tau_c, *work, t;
   if (argc < 3 || argc > 4) {
     fprintf(stderr, "usage: %s M N [Verbose]\n", argv[0]);
     return 1;
@@ -153,14 +220,28 @@ int main(int argc, char **argv) {
     FPrintMatrix(stdout, "B", "% 10.6f", m, n, b);
     FPrintMatrix(stdout, "tauB", "% 10.6f", 1, n, tau_b);
   }
+  
+  VanderCheb(m, n, x, &c);
+  MallocA(n, &tau_c);
+  t = gettime();
+  QRFactorTS(m, n, c, m, tau_c, work, lwork, &info);
+  t = gettime() - t;
+  printf("%10s %10.6f s\t%7.3f GF/s\n", "QRFactorTS", t, (2.*m*n*n - 2./3*n*n*n)*1e-9/t);
+  if (verbose) {
+    FPrintMatrix(stdout, "A", "% 10.6f", m, n, c);
+    FPrintMatrix(stdout, "tauC", "% 10.6f", 1, n, tau_c);
+  }
 
-  printf("max difference %e, tau %e\n", MaxDifference(m, n, a, b), MaxDifference(1, n, tau_a, tau_b));
+  printf("max difference a-b %e, and tau a-b %e\n", MaxDifference(m, n, a, b), MaxDifference(1, n, tau_a, tau_b));
+  printf("max difference a-c %e, and tau a-c %e\n", MaxDifference(m, n, a, c), MaxDifference(1, n, tau_a, tau_c));
 
   free(x);
   free(a);
   free(b);
+  free(c);
   free(tau_a);
   free(tau_b);
+  free(tau_c);
   free(work);
   return 0;
 }

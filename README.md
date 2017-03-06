@@ -7,7 +7,7 @@ QR factorization testbed
 # HW2
 ## Due 2017-03-01
 
-This assignment experiments with modifying the code.  If you have any
+This assignment experiments with modifying the code.  If you have any   
 data files or figures, just "git add" them and commit.  Put text
 explanation/analysis in a the commit message or a markdown file.
 
