@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <omp.h>
 
 #define MallocA(n, ptr) posix_memalign((void**)ptr, 64, (n) * sizeof(**(ptr)));
 
@@ -83,6 +84,7 @@ void VecAXPY(int n, double *y, double alpha, const double *x) {
 // in-place.  The reflector plane is defined by the vector v = [1; x].
 // That is, the first entry of v is implicitly 1 and not stored.
 void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
+  #pragma omp parallel for
   for (int i=0; i<n; i++) { // One column at a time
     double *ai = &a[0+lda*i];
     double dot = ai[0] + VecDot(m-1, x, ai+1);
@@ -90,6 +92,17 @@ void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
     VecAXPY(m-1, ai+1, -tau*dot, x);
   }
 }
+
+// void Reflect2(int m, int n, double *a, int lda, const double *x, double tau) {
+//     // Two columns at a time
+//   #pragma omp parallel for
+//   for (int i=0; i<n; i++) { // One column at a time
+//     double *ai = &a[0+lda*i];
+//     double dot = ai[0] + VecDot(m-1, x, ai+1);
+//     ai[0] -= tau*dot;
+//     VecAXPY(m-1, ai+1, -tau*dot, x);
+//   }
+// }
 
 // Compute the in-place Householder QR factorization of A.
 // This function is meant to be a simple version of dgeqrf.
@@ -109,6 +122,9 @@ void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int l
     tau[i] = 2 / (norm*norm);
     a[i + lda*i] = Rii;
     Reflect1(m-i, n-i-1, &a[i+lda*(i+1)], lda, &v[1], tau[i]);
+    //if (i > 0) {
+        // Add columns to tau matrix
+    //}
   }
   *info = 0;
 }
@@ -133,6 +149,7 @@ int main(int argc, char **argv) {
 
   VanderCheb(m, n, x, &a);
   MallocA(n, &tau_a);
+  // MallocA(n, &tau_a);
   t = gettime();
   QRFactor(m, n, a, m, tau_a, work, lwork, &info);
   t = gettime() - t;
