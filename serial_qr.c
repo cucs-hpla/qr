@@ -1,6 +1,5 @@
 #define _XOPEN_SOURCE 700
 
-#include <omp.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
