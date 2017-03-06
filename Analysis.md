@@ -7,7 +7,7 @@ The sizes that saw the most performance increase were non-square matrices where 
 	On top of throwing more processors at the problem, I believe that the memory associated with the QR decompositions could be handled better when creating separate threads. By associating specific cache lines with specific threads we could theoretically decrease the time required to grab data from memory. Although I do not know specifically how PAD works, I have scene parallel omp for loop performance increase when we associate specific chunks of cache memory to threads. 
 
 
-3) uhhh....
+3) uhhh.... implementing TSQR in C seems to be a bit above my skill level. I haven't personally done all that much C coding, I generally work with higher languages. Thus i apparently can not implement a blocked QR algorithm that decomposes A. I began to outline the structure of the code as given in the notebook on github.  
 
 
 
