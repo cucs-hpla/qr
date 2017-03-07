@@ -1,6 +1,5 @@
 #define _XOPEN_SOURCE 700
 
-#include <omp.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -95,7 +94,7 @@ void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
 // Compute the in-place Householder QR factorization of A.
 // This function is meant to be a simple version of dgeqrf.
 void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int lwork, int *info) {
-  for (int i=0; i<n; i++) {
+   for (int i=0; i<n; i++) {
     if (m-i-1 == 0) { // No sub-diagonal
       tau[n-1] = 0;
       break;
@@ -114,6 +113,63 @@ void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int l
   *info = 0;
 }
 
+
+void QRWY(int m, int n, double *a, int lda, double *tau, double *work, int lwork int *info){
+
+for (i = 0; i<n; i++){
+    double v = &a[i+lda*i];
+    double d = VecDot(m-i-1, v+1, v+1);
+    double norm = sqrt(d + v[0]*v[0]);
+    double Rii = -copysign(norm, v[0]);
+    v[0] -= Rii;
+    tau = 2*v[0]*v[0]/(v[0]*v[0] +d);
+    v = v/v[0];
+    VecScale(m-i, v, 1/v[0]);
+    Reflect1(m-i, n-i-1, &a[i+lda*(i+1)], lda, &v[1], tau[i]);
+  
+
+    if (i > 0){
+       double* T;
+//T[:i,i] = -tau * T[:i,:i].dot(F[i:,:i].T.dot(v))    
+//F[i,i] = Rii
+         =  -tau * vecDot(i, vecDot(i, a[]))
+
+
+
+    }
+
+    a[i+lda *i] = Rii
+}
+
+}
+
+
+
+void TSQR(int m, int n, double *a, int lda, double *tau, double *work, int lwork, int *info) {
+
+
+if (m <= 2*n){
+ QRWY(m, n, a, tau, work, lwork, info)
+
+}
+else{
+  tau1 = calloc(n*n,sizeof(double));
+  tau2 = calloc(n*n,sizeof(double));
+
+  //break A in half half and repeat untill you have a matrix where m is at least twice n
+    int new_m = m/2;
+    //create two new a's from a(a1, a2)
+ TSQR(m, n, a1, tau1, work, lwork, info);	//rerun qrwy on sub matrices
+ TSQR(m, n, a2, tau2, work, lwork, info);
+
+
+//if we ever make it to this point, combine q's and r's 
+//free memory
+}
+}
+
+
+
 // Declare LAPACK dgeqrf (assuming the most common Fortran name mangling)
 void dgeqrf_(int *m, int *n, double *a, int *lda, double *tau, double *work, int *lwork, int *info);
 
@@ -121,6 +177,8 @@ int main(int argc, char **argv) {
   int verbose = 0;
   int m, n, lwork, info;
   double *x, *a, *b, *tau_a, *tau_b, *work, t;
+
+
   if (argc < 3 || argc > 4) {
     fprintf(stderr, "usage: %s M N [Verbose]\n", argv[0]);
     return 1;
@@ -135,7 +193,10 @@ int main(int argc, char **argv) {
   VanderCheb(m, n, x, &a);    //Creates the matrix to be used during qr factorization
   MallocA(n, &tau_a);
   t = gettime();
-  QRFactor(m, n, a, m, tau_a, work, lwork, &info);
+  TSQR(m, n, a, m, tau, work, lwork, &info);
+
+
+
   t = gettime() - t;
   printf("%10s %10.6f s\t%7.3f GF/s\n", "QRFactor", t, (2.*m*n*n - 2./3*n*n*n)*1e-9/t);
   if (verbose) {
