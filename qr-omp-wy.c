@@ -32,7 +32,7 @@ void VanderCheb(int m, int n, double *x, double **a) {
   for (int i=0; i<m; i++) {
     int j = 0;
     for ( ; j<1; j++) b[i+m*j] = 1;
-    for ( ; j<2; j++) b[i+m*j] = x[i];
+    for ( ; j<2; j++) b[i+m*j] = 2*x[i];
     for ( ; j<n; j++) {
       b[i+m*j] = 2*x[i]*b[i+m*(j-1)] - b[i+m*(j-2)];
     }
@@ -101,24 +101,53 @@ void Reflect1(int m, int n, double *a, int lda, const double *x, double tau) {
 
 // Compute the in-place Householder QR factorization of A.
 // This function is meant to be a simple version of dgeqrf.
-void QRFactor(int m, int n, double *a, int lda, double *tau, double *work, int lwork, int *info) {
+void dgemv_(char,int,int,double,double**,int,double*,int,double,double*,int);
+void QRFactor_WY(int m, int n, double *a, int lda, double *T, double *work, int lwork, int *info) {
   for (int i=0; i<n; i++) {
-    if (m-i-1 == 0) { // No sub-diagonal
-      tau[n-1] = 0;
-      break;
-    }
     double *v = &a[i+lda*i];
     double d = VecDot(m-i-1, v+1, v+1);
     double norm = sqrt(d + v[0]*v[0]);
     double Rii = -copysign(norm, v[0]);
     v[0] -= Rii;
-    norm = sqrt(d + v[0]*v[0]) / v[0]; // New norm of v after modification above and scaling below
+    double tau = 2*pow(v[0],2)/(pow(v[0],2)+d);
     VecScale(m-i, v, 1/v[0]);
-    tau[i] = 2 / (norm*norm);
-    a[i + lda*i] = Rii;
-    Reflect1(m-i, n-i-1, &a[i+lda*(i+1)], lda, &v[1], tau[i]);
-  }
-  *info = 0;
+    //update remaining panel
+    Reflect1(m-i, n-i-1, &a[i+lda*(i+1)], lda, &v[1], tau);
+    T[i*n+i]=tau;
+    //Add this column to T
+    if(i>0){
+      double **tmp = malloc((m-i)*sizeof(double*));
+      for (int j=0;j<(m-i);j++){ tmp[j] = malloc((i)*sizeof(double));}
+
+      for (int j=0;j<m-i;j++){
+        for (int k=0;k<i;k++){
+          tmp[j][k] = a[(j+i)+lda*k];
+        }
+      }
+      double *tmp2 = calloc(i,sizeof(double));
+      for (int j=0;j<i;j++){
+        for (int l=0;l<m-i;l++){
+          tmp2[j]+=v[l]*tmp[l][j];
+        }
+      }
+      double *tmp3 = calloc(i,sizeof(double));
+      for (int j=0;j<i;j++){
+        for (int l=0;l<i;l++){
+          tmp3[j]+=tmp2[l]*T[l*n+j];
+        }
+      }
+      for(int j=0;j<i;j++){
+        tmp3[j]*=-tau;    
+      }
+      for(int j=0;j<i;j++){
+         T[i*n+j]=tmp3[j];
+      } 
+      for (int j=0;j<m-i;j++){free(tmp[j]);}
+        free(tmp);free(tmp2);free(tmp3);
+    }
+    a[i+lda*i]=Rii;  
+    }
+*info = 0;
 }
 
 // Declare LAPACK dgeqrf (assuming the most common Fortran name mangling)
@@ -138,16 +167,16 @@ int main(int argc, char **argv) {
   lwork = 8*n;
   MallocA(lwork, &work);
   Cosspace(-1, 1, m, &x);
-
   VanderCheb(m, n, x, &a);
-  MallocA(n, &tau_a);
+
+  MallocA(n*n, &tau_a);
   t = gettime();
-  QRFactor(m, n, a, m, tau_a, work, lwork, &info);
+  QRFactor_WY(m, n, a, m, tau_a, work, lwork, &info);
   t = gettime() - t;
   printf("%10s %10.6f s\t%7.3f GF/s\n", "QRFactor", t, (2.*m*n*n - 2./3*n*n*n)*1e-9/t);
   if (verbose) {
     FPrintMatrix(stdout, "A", "% 10.6f", m, n, a);
-    FPrintMatrix(stdout, "tauA", "% 10.6f", 1, n, tau_a);
+    FPrintMatrix(stdout, "tauA", "% 10.6f", n, n, tau_a);
   }
 
   VanderCheb(m, n, x, &b);
